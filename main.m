@@ -56,7 +56,7 @@ ylabel(lidarViewer.Axes, 'Y (m)');
 zlabel(lidarViewer.Axes, 'Z (m)');
 
 new_points = [];
-for k=1:10:861-1
+for k=1:10:size(allData,2)-1
     pose = PP(uint32((k-1)/10)+1,:);
     %PP = [cell2mat(arrayfun(@(S) S.ActorPoses.Position, allData, 'UniformOutput', false)), cell2mat(arrayfun(@(S) S.ActorPoses.Orientation, allData, 'UniformOutput', false))];
 
@@ -126,8 +126,31 @@ for k=1:10:861-1
     if size(new_points)>0
         view(lidarViewer, new_points)
         %pause(0.01)
+    end 
+end
+
+%Radar and Camera
+for i=1:10:size(allData,2)-1
+    objects = allData(i).ObjectDetections;
+
+    if size(objects,1)==0
+        continue
     end
-    
+
+    pose = PP(uint32((i-1)/10)+1,:);
+
+    T = geotransf(pose(1),pose(2),pose(3),pose(4),pose(5),pose(6));
+
+    for j=1:size(objects,1)
+        object = objects{j,1}.Measurement;
+        
+        object = T*[object(1) object(2) 0 1]';
+
+        object = object(1:3)';
+
+        new_points = [new_points; object];
+        new_points = [new_points; object];
+    end
 end
 
 ptCloud = pointCloud(new_points);
