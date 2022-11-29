@@ -1,11 +1,14 @@
 close
 clear
 clc
-load Project1/allData2.mat
+load Street_Targets_Detection/allData2.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
-PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
+%PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
+PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
+
+
 
 
 axis equal
@@ -19,6 +22,14 @@ for i=1:uint32(size(PP,1)/10)
 end
 
 PP = newPP;
+
+newPP = zeros([size(PP,1),6]);
+for i=1:size(PP,1)-1
+    newPP(i,:) = [PP(i,:) 0 0 atan2(PP(i+1,2)-PP(i,2), PP(i+1,1)-PP(i,1))];
+end
+
+PP = newPP;
+
 subplot(1,2,2)
 plot(PP(:,1), PP(:,2), '.b');
 
@@ -44,38 +55,100 @@ xlabel(lidarViewer.Axes, 'X (m)');
 ylabel(lidarViewer.Axes, 'Y (m)');
 zlabel(lidarViewer.Axes, 'Z (m)');
 
-points3 = [];
+new_points = [];
 for k=1:10:861-1
     pose = PP(uint32((k-1)/10)+1,:);
+    %PP = [cell2mat(arrayfun(@(S) S.ActorPoses.Position, allData, 'UniformOutput', false)), cell2mat(arrayfun(@(S) S.ActorPoses.Orientation, allData, 'UniformOutput', false))];
+
+    %pose = PP(uint32((k-1)/10)+1,:);
     T = geotransf(pose(1),pose(2),pose(3),pose(4),pose(5),pose(6));
 
-    pc = allData(k).PointClouds{1,1};
+    ptCloud = allData(k).PointClouds{1,1};
 
-    ground = segmentGroundFromLidarData(pc, 'ElevationAngleDelta', 10);
-
-    points = pc.Location;
-
-    points2 = [];
-
-    for i=1:size(points,1)
-        for j=1:size(points,2)
-            point = [points(i,j,1) points(i,j,2) points(i,j,3) 1]';
-            if and(and(~isnan(point(1)),~ground(i,j)), point(3)>0.01)
-                if ~(point(1) > limits(1,1) & point(1) < limits(1,2) & point(2) > limits(2,1) ...
-                    & point(2) < limits(2,2) & point(3) > limits(3,1) & point(3) < limits(3,2))
-                    points2 = [points2; point(1:3)'];
-                    point = T*point;
-                    points3 = [points3; point(1:3)'];
-                end
-            end
-        end
-    end
-
-    pc.removeInvalidPoints();
+    points = struct();
+    points.EgoPoints = ptCloud.Location(:,:,1) > limits(1,1) ...
+        & ptCloud.Location(:,:,1) < limits(1,2) ...
+        & ptCloud.Location(:,:,2) > limits(2,1) ...
+        & ptCloud.Location(:,:,2) < limits(2,2) ...
+        & ptCloud.Location(:,:,3) > limits(3,1) ...
+        & ptCloud.Location(:,:,3) < limits(3,2);
     
-    %View the point cloud
-    if size(points3,1)>0
-        view(lidarViewer, points3);
-        pause(0.2)
+    points2 = struct();
+    points2.EgoPoints = ptCloud.Location(:,:,3) < 0.1;
+    
+    points.GroundPoints = segmentGroundFromLidarData(ptCloud,'ElevationAngleDelta', 10);
+
+    nonEgoGroundPoints = ~points.EgoPoints & ~points.GroundPoints & ~points2.EgoPoints;
+
+    ptCloudSegmented = select(ptCloud, nonEgoGroundPoints,'Output','full');
+
+    minNumPoints = 5;
+    [labels, numClusters] = segmentLidarData(ptCloudSegmented, 1, 180, 'NumClusterPoints', minNumPoints);
+
+    % --------------------------DEBUG-----------------------------
+%     idxValidPoints = find(labels);
+% 
+%     segmentedPtCloud = select(ptCloudSegmented, idxValidPoints);
+% 
+%      %View the point cloud
+%     if size(segmentedPtCloud.Location,1)>2
+%         
+%         for i=1:size(segmentedPtCloud.Location,1)
+%             labels
+%             point = T*[segmentedPtCloud.Location(i,:) 1]';
+%             new_points = [new_points; point(1:3)'];
+%         end
+%         view(lidarViewer, new_points)
+%         pause(0.2)
+%     end
+    % ------------------------------------------------------------
+
+    for j=1:uint8(numClusters)
+        idxValidPoints = find(labels==j);
+
+        if size(idxValidPoints,1)<2
+            continue
+        end
+    
+        segmentedPtCloud = select(ptCloudSegmented, idxValidPoints);
+
+        points = [];
+        for i=1:size(segmentedPtCloud.Location,1)
+                point = T*[segmentedPtCloud.Location(i,:) 1]';
+                points = [points; point(1:3)'];
+        end
+
+        center = mean(points, 1);
+        
+        new_points = [new_points; center];
     end
+
+    if size(new_points)>0
+        view(lidarViewer, new_points)
+        %pause(0.01)
+    end
+    
+end
+
+ptCloud = pointCloud(new_points);
+[labels,numClusters] = pcsegdist(ptCloud,1);
+
+new_points = [];
+
+for j=1:uint8(numClusters)
+    idxValidPoints = find(labels==j);
+
+    if size(idxValidPoints,1)<3
+        continue
+    end
+
+    segmentedPtCloud = select(ptCloud, idxValidPoints);
+
+    center = mean(segmentedPtCloud.Location, 1);
+    
+    new_points = [new_points; center];
+end
+
+if size(new_points)>0
+    view(lidarViewer, new_points)
 end
