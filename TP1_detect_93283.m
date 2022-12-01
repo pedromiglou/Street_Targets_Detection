@@ -14,8 +14,8 @@ plot(PP(:,1), PP(:,2), '.b');
 
 newPP = [];
 
-for i=1:uint32(size(PP,1)/10)
-    newPP = [newPP; mean(PP((i-1)*10+1:i*10,:),1)];
+for i=1:10:size(PP,1)
+    newPP = [newPP; mean(PP(max(1, i-10):min(i+10, size(PP,1)),:),1)];
 end
 
 PP = newPP;
@@ -71,7 +71,10 @@ for k=1:10:size(allData,2)-1
         & ptCloud.Location(:,:,3) < limits(3,2);
     
     points2 = struct();
-    points2.EgoPoints = ptCloud.Location(:,:,3) < 0.1;
+    points2.EgoPoints = ptCloud.Location(:,:,3) < 0.1 ...
+        | (ptCloud.Location(:,:,1)-pose(1)).^2 ...
+        + (ptCloud.Location(:,:,2)-pose(2)).^2 ...
+        + (ptCloud.Location(:,:,3)-pose(3)).^2 > 25;
     
     points.GroundPoints = segmentGroundFromLidarData(ptCloud,'ElevationAngleDelta', 10);
 
@@ -79,7 +82,7 @@ for k=1:10:size(allData,2)-1
 
     ptCloudSegmented = select(ptCloud, nonEgoGroundPoints,'Output','full');
 
-    minNumPoints = 5;
+    minNumPoints = 3;
     [labels, numClusters] = segmentLidarData(ptCloudSegmented, 1, 180, 'NumClusterPoints', minNumPoints);
 
     % --------------------------DEBUG-----------------------------
@@ -111,8 +114,8 @@ for k=1:10:size(allData,2)-1
 
         points = [];
         for i=1:size(segmentedPtCloud.Location,1)
-                point = T*[segmentedPtCloud.Location(i,:) 1]';
-                points = [points; point(1:3)'];
+            point = T*[segmentedPtCloud.Location(i,:) 1]';
+            points = [points; point(1:3)'];
         end
 
         center = mean(points, 1);
@@ -175,7 +178,7 @@ end
 
 %% Processing
 ptCloud = pointCloud(new_points);
-[labels,numClusters] = pcsegdist(ptCloud,1);
+[labels,numClusters] = pcsegdist(ptCloud,2);
 
 new_points = [];
 peds = 0;
