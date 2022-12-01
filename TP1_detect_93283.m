@@ -1,7 +1,7 @@
 close
 clear
 clc
-load Street_Targets_Detection/allData2.mat
+load Street_Targets_Detection/allData3.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
@@ -125,7 +125,7 @@ for k=1:10:size(allData,2)-1
 
     if size(new_points)>0
         view(lidarViewer, new_points)
-        %pause(0.01)
+        %pause(0.1)
     end 
 end
 
