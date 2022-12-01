@@ -8,9 +8,6 @@ load Street_Targets_Detection/allData2.mat
 %PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
 PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
 
-
-
-
 axis equal
 subplot(1,2,1)
 plot(PP(:,1), PP(:,2), '.b');
@@ -130,6 +127,8 @@ for k=1:10:size(allData,2)-1
 end
 
 %Radar and Camera
+X = [];
+Y = [];
 for i=1:10:size(allData,2)-1
     objects = allData(i).ObjectDetections;
 
@@ -150,13 +149,39 @@ for i=1:10:size(allData,2)-1
 
         new_points = [new_points; object];
         new_points = [new_points; object];
+
+        if objects{j,1}.ObjectClassID == 4 % pedestrians
+            X = [X; object];
+            Y = [Y; 4];
+        end
+
+        if objects{j,1}.ObjectClassID == 3 % bycicles
+            X = [X; object];
+            Y = [Y; 3];
+        end
+
+        if objects{j,1}.ObjectClassID == 1 % cars
+            X = [X; object];
+            Y = [Y; 1];
+        end
+
+        if objects{j,1}.ObjectClassID == 5 % barriers
+            X = [X; object];
+            Y = [Y; 5];
+        end
     end
+
 end
 
+%% Processing
 ptCloud = pointCloud(new_points);
 [labels,numClusters] = pcsegdist(ptCloud,1);
 
 new_points = [];
+peds = 0;
+bikes = 0;
+cars = 0;
+barriers = 0;
 
 for j=1:uint8(numClusters)
     idxValidPoints = find(labels==j);
@@ -170,8 +195,28 @@ for j=1:uint8(numClusters)
     center = mean(segmentedPtCloud.Location, 1);
     
     new_points = [new_points; center];
+
+    classification = kNearestNeighbors(X, Y, center);
+    
+    if classification == 1
+        cars = cars + 1;
+    elseif classification == 3
+        bikes = bikes + 1;
+    elseif classification == 4
+        peds = peds+1;
+    elseif classification == 5
+        barriers = barriers+1;
+    end
 end
 
 if size(new_points)>0
     view(lidarViewer, new_points)
 end
+
+%% Save on file
+fileID = fopen('TP1_results_93283.txt','w');
+fprintf(fileID,'93283,');
+fprintf(fileID,'%3.2f,',Lcar);
+fprintf(fileID,'%3.2f,',peds);
+fprintf(fileID,'%3.2f,',cars);
+fprintf(fileID,'%3.2f,',bikes);
