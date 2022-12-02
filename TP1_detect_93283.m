@@ -126,7 +126,7 @@ for k=1:10:size(allData,2)-1
     if size(new_points)>0
         view(lidarViewer, new_points)
         %pause(0.1)
-    end 
+    end
 end
 
 %Radar and Camera
@@ -178,7 +178,7 @@ end
 
 %% Processing
 ptCloud = pointCloud(new_points);
-[labels,numClusters] = pcsegdist(ptCloud,2);
+[labels,numClusters] = pcsegdist(ptCloud,3);
 
 new_points = [];
 peds = 0;
@@ -209,6 +209,27 @@ for j=1:uint8(numClusters)
         peds = peds+1;
     elseif classification == 5
         barriers = barriers+1;
+    end
+
+    if cars==1
+        [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
+
+        p1 = PP(index(1), 1:3);
+
+        p2 = PP(index(2), 1:3);
+
+        pf = polyfit([p2(1),p1(1)], [p2(2),p1(2)],1);
+
+        a = pf(1); b = pf(2);
+
+        a2 = -1/a;
+        b2 = 1/a*center(1) + center(2);
+
+        pointX = (b2-b)/(a-a2);
+        pointY = a2*pointX+b2;
+
+        distance = sqrt(pointX^2 + pointY^2);
+
     end
 end
 
