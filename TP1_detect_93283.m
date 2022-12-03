@@ -1,4 +1,4 @@
-close
+close all
 clear
 clc
 load Street_Targets_Detection/allData3.mat
@@ -6,7 +6,8 @@ load Street_Targets_Detection/allData3.mat
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
 %PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
-PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
+%PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
+PP = cell2mat(arrayfun(@(S) S.ActorPoses(1).Position', allData, 'UniformOutput', false))';
 
 axis equal
 subplot(1,2,1)
@@ -74,7 +75,7 @@ for k=1:10:size(allData,2)-1
     points2.EgoPoints = ptCloud.Location(:,:,3) < 0.1 ...
         | (ptCloud.Location(:,:,1)-pose(1)).^2 ...
         + (ptCloud.Location(:,:,2)-pose(2)).^2 ...
-        + (ptCloud.Location(:,:,3)-pose(3)).^2 > 25;
+        + (ptCloud.Location(:,:,3)-pose(3)).^2 > 2500;
     
     points.GroundPoints = segmentGroundFromLidarData(ptCloud,'ElevationAngleDelta', 10);
 
@@ -134,10 +135,7 @@ X = [];
 Y = [];
 for i=1:10:size(allData,2)-1
     objects = allData(i).ObjectDetections;
-
-    if size(objects,1)==0
-        continue
-    end
+    laneObjects = allData(i).LaneDetections;
 
     pose = PP(uint32((i-1)/10)+1,:);
 
@@ -150,27 +148,58 @@ for i=1:10:size(allData,2)-1
 
         object = object(1:3)';
 
-        new_points = [new_points; object];
-        new_points = [new_points; object];
+        %new_points = [new_points; object];
+        %new_points = [new_points; object];
 
         if objects{j,1}.ObjectClassID == 4 % pedestrians
             X = [X; object];
-            Y = [Y; 4];
+            Y = [Y; 4 0];
         end
 
         if objects{j,1}.ObjectClassID == 3 % bycicles
             X = [X; object];
-            Y = [Y; 3];
+            Y = [Y; 3 0];
         end
 
         if objects{j,1}.ObjectClassID == 1 % cars
             X = [X; object];
-            Y = [Y; 1];
+            Y = [Y; 1 0];
         end
 
         if objects{j,1}.ObjectClassID == 5 % barriers
             X = [X; object];
-            Y = [Y; 5];
+            Y = [Y; 5 0];
+        end
+    end
+
+    for j=1:size(laneObjects,1)
+        object = laneObjects{j,1}.Measurement;
+        
+        object = T*[object(1) object(2) 0 1]';
+
+        object = object(1:3)';
+
+        %new_points = [new_points; object];
+        %new_points = [new_points; object];
+
+        if objects{j,1}.ObjectClassID == 4 % pedestrians
+            X = [X; object];
+            Y = [Y; 4 1];
+        end
+
+        if objects{j,1}.ObjectClassID == 3 % bycicles
+            X = [X; object];
+            Y = [Y; 3 1];
+        end
+
+        if objects{j,1}.ObjectClassID == 1 % cars
+            X = [X; object];
+            Y = [Y; 1 1];
+        end
+
+        if objects{j,1}.ObjectClassID == 5 % barriers
+            X = [X; object];
+            Y = [Y; 5 1];
         end
     end
 
@@ -182,16 +211,21 @@ ptCloud = pointCloud(new_points);
 
 new_points = [];
 peds = 0;
+inPeds = 0;
 bikes = 0;
-cars = 0;
-barriers = 0;
+MovCars = 0;
+StopCars = 0;
+Lped1 = -1;
+LStopCar1=-1;
+LBarrFirst=-1;
+LBarrLast=-1;
 
 for j=1:uint8(numClusters)
     idxValidPoints = find(labels==j);
 
-    if size(idxValidPoints,1)<3
-        continue
-    end
+    %if size(idxValidPoints,1)<3
+    %    continue
+    %end
 
     segmentedPtCloud = select(ptCloud, idxValidPoints);
 
@@ -201,17 +235,20 @@ for j=1:uint8(numClusters)
 
     classification = kNearestNeighbors(X, Y, center);
     
-    if classification == 1
-        cars = cars + 1;
-    elseif classification == 3
+    if classification(1) == 1
+        StopCars = StopCars + 1;
+        MovCars = MovCars + 1;
+    elseif classification(1) == 3
         bikes = bikes + 1;
-    elseif classification == 4
+    elseif classification(1) == 4
         peds = peds+1;
-    elseif classification == 5
-        barriers = barriers+1;
+        if classification(2) == 1
+            inPeds = inPeds+1;
+        end
     end
 
-    if cars==1
+    % Distância linear (desde o início da simulação) do primeiro peão encontrado na faixa (Lped1)
+    if classification(1) == 4 & classification(2) == 1 & Lped1==-1
         [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
 
         p1 = PP(index(1), 1:3);
@@ -228,9 +265,57 @@ for j=1:uint8(numClusters)
         pointX = (b2-b)/(a-a2);
         pointY = a2*pointX+b2;
 
-        distance = sqrt(pointX^2 + pointY^2);
-
+        Lped1 = sqrt(pointX^2 + pointY^2);
     end
+
+    % Distância linear (desde o início da simulação) do primeiro veículo parado encontrado na estrada (LStopCar1)
+    if classification(1) == 1 & classification(2) == 1 & LStopCar1==-1
+        [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
+
+        p1 = PP(index(1), 1:3);
+
+        p2 = PP(index(2), 1:3);
+
+        pf = polyfit([p2(1),p1(1)], [p2(2),p1(2)],1);
+
+        a = pf(1); b = pf(2);
+
+        a2 = -1/a;
+        b2 = 1/a*center(1) + center(2);
+
+        pointX = (b2-b)/(a-a2);
+        pointY = a2*pointX+b2;
+
+        LStopCar1 = sqrt(pointX^2 + pointY^2);
+    end
+
+    %Distância linear (desde o início da simulação) do início da primeira barreira encontrada junto à estrada (LBarrFirst)
+    %Distância linear (desde o início da simulação) do fim da última barreira encontrada junto à estrada (LBarrLast)
+    if classification(1) == 5 & classification(2) == 0 & LStopCar1==-1
+        [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
+
+        p1 = PP(index(1), 1:3);
+
+        p2 = PP(index(2), 1:3);
+
+        pf = polyfit([p2(1),p1(1)], [p2(2),p1(2)],1);
+
+        a = pf(1); b = pf(2);
+
+        a2 = -1/a;
+        b2 = 1/a*center(1) + center(2);
+
+        pointX = (b2-b)/(a-a2);
+        pointY = a2*pointX+b2;
+
+        LBarrLast = sqrt(pointX^2 + pointY^2);
+
+        if LBarrFirst==-1
+            LBarrFirst = LBarrLast;
+        end
+    end
+
+    
 end
 
 if size(new_points)>0
@@ -242,5 +327,10 @@ fileID = fopen('TP1_results_93283.txt','w');
 fprintf(fileID,'93283,');
 fprintf(fileID,'%3.2f,',Lcar);
 fprintf(fileID,'%3.2f,',peds);
-fprintf(fileID,'%3.2f,',cars);
+fprintf(fileID,'%3.2f,',StopCars);
+fprintf(fileID,'%3.2f,',MovCars);
 fprintf(fileID,'%3.2f,',bikes);
+fprintf(fileID,'%3.2f,',Lped1);
+fprintf(fileID,'%3.2f,',LStopCar1);
+fprintf(fileID,'%3.2f,',LBarrFirst);
+fprintf(fileID,'%3.2f,',LBarrLast);
