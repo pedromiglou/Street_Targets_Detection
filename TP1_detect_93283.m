@@ -7,29 +7,35 @@ load Street_Targets_Detection/allData3.mat
 
 %PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
 %PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
-PP = cell2mat(arrayfun(@(S) S.ActorPoses(1).Position', allData, 'UniformOutput', false))';
+%PP = cell2mat(arrayfun(@(S) S.ActorPoses(1).Position', allData, 'UniformOutput', false))';
+PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Velocity', allData, 'UniformOutput', false))';
 
 axis equal
-subplot(1,2,1)
-plot(PP(:,1), PP(:,2), '.b');
+%subplot(1,2,1)
+%plot(PP(:,1), PP(:,2), '.b');
 
 newPP = [];
 
-for i=1:10:size(PP,1)
-    newPP = [newPP; mean(PP(max(1, i-10):min(i+10, size(PP,1)),:),1)];
+cPos = [0 0 0];
+
+for i=1:size(PP,1)
+    %newPP = [newPP; mean(PP(max(1, i-10):min(i+10, size(PP,1)),:),1)];
+    cPos = [cPos(1) + PP(i,1)*0.01, cPos(2) + PP(i,2)*0.01, cPos(3) + PP(i,3)*0.01];
+    newPP = [newPP; cPos];
 end
 
 PP = newPP;
 
-newPP = zeros([size(PP,1),6]);
-for i=1:size(PP,1)-1
-    newPP(i,:) = [PP(i,:) 0 0 atan2(PP(i+1,2)-PP(i,2), PP(i+1,1)-PP(i,1))];
+newPP = [];
+for i=1:10:size(PP,1)-1
+    newPP = [newPP; PP(i,:) 0 0 atan2(PP(i+1,2)-PP(i,2), PP(i+1,1)-PP(i,1))];
 end
+newPP = [newPP; PP(end,:) 0 0 newPP(end,6)];
 
 PP = newPP;
 
-subplot(1,2,2)
-plot(PP(:,1), PP(:,2), '.b');
+%subplot(1,2,2)
+%plot(PP(:,1), PP(:,2), '.b');
 
 %257,... is the right value
 Lcar = sum(sqrt(sum(diff(PP(:,1:3)).^2,2)));
@@ -42,9 +48,10 @@ limits = [-2 vehicleDims.Length;
 -vehicleDims.Width/2-1 vehicleDims.Width/2+1;
 -1 vehicleDims.Height+1];
 
-xlimits = allData(1).PointClouds{1,1}.XLimits;
+%xlimits = allData(1).PointClouds{1,1}.XLimits;
 %ylimits = allData(1).PointClouds{1,1}.YLimits;
-ylimits = [-50 50];
+xlimits = [-100 100];
+ylimits = [-100 100];
 zlimits = allData(1).PointClouds{1,1}.ZLimits;
 
 lidarViewer = pcplayer(xlimits, ylimits, zlimits);
@@ -85,24 +92,6 @@ for k=1:10:size(allData,2)-1
 
     minNumPoints = 3;
     [labels, numClusters] = segmentLidarData(ptCloudSegmented, 1, 180, 'NumClusterPoints', minNumPoints);
-
-    % --------------------------DEBUG-----------------------------
-%     idxValidPoints = find(labels);
-% 
-%     segmentedPtCloud = select(ptCloudSegmented, idxValidPoints);
-% 
-%      %View the point cloud
-%     if size(segmentedPtCloud.Location,1)>2
-%         
-%         for i=1:size(segmentedPtCloud.Location,1)
-%             labels
-%             point = T*[segmentedPtCloud.Location(i,:) 1]';
-%             new_points = [new_points; point(1:3)'];
-%         end
-%         view(lidarViewer, new_points)
-%         pause(0.2)
-%     end
-    % ------------------------------------------------------------
 
     for j=1:uint8(numClusters)
         idxValidPoints = find(labels==j);
