@@ -1,7 +1,7 @@
 close all
 clear
 clc
-load Street_Targets_Detection/allData3.mat
+load Street_Targets_Detection/allData4.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
@@ -10,7 +10,7 @@ load Street_Targets_Detection/allData3.mat
 %PP = cell2mat(arrayfun(@(S) S.ActorPoses(1).Position', allData, 'UniformOutput', false))';
 PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Velocity', allData, 'UniformOutput', false))';
 
-axis equal
+%axis equal
 %subplot(1,2,1)
 %plot(PP(:,1), PP(:,2), '.b');
 
@@ -303,8 +303,6 @@ for j=1:uint8(numClusters)
             LBarrFirst = LBarrLast;
         end
     end
-
-    
 end
 
 if size(new_points)>0
