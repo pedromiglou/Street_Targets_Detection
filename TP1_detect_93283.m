@@ -1,7 +1,7 @@
 close all
 clear
 clc
-load Street_Targets_Detection/allData4.mat
+load Street_Targets_Detection/allData.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
@@ -160,38 +160,6 @@ for i=1:10:size(allData,2)-1
             Y = [Y; 5 0];
         end
     end
-
-    for j=1:size(laneObjects,1)
-        object = laneObjects{j,1}.Measurement;
-        
-        object = T*[object(1) object(2) 0 1]';
-
-        object = object(1:3)';
-
-        %new_points = [new_points; object];
-        %new_points = [new_points; object];
-
-        if objects{j,1}.ObjectClassID == 4 % pedestrians
-            X = [X; object];
-            Y = [Y; 4 1];
-        end
-
-        if objects{j,1}.ObjectClassID == 3 % bycicles
-            X = [X; object];
-            Y = [Y; 3 1];
-        end
-
-        if objects{j,1}.ObjectClassID == 1 % cars
-            X = [X; object];
-            Y = [Y; 1 1];
-        end
-
-        if objects{j,1}.ObjectClassID == 5 % barriers
-            X = [X; object];
-            Y = [Y; 5 1];
-        end
-    end
-
 end
 
 %% Processing
