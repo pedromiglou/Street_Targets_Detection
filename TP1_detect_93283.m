@@ -1,7 +1,7 @@
 close all
 clear
 clc
-load Street_Targets_Detection/allData.mat
+load Street_Targets_Detection/allData_93283.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
@@ -122,9 +122,16 @@ end
 %Radar and Camera
 X = [];
 Y = [];
+
+X2 = [];
+Y2 = [];
+
+X3 = [];
+Y3 = [];
+
 for i=1:10:size(allData,2)-1
     objects = allData(i).ObjectDetections;
-    laneObjects = allData(i).LaneDetections;
+    lanes = allData(i).LaneDetections.LaneBoundaries;
 
     pose = PP(uint32((i-1)/10)+1,:);
 
@@ -132,32 +139,55 @@ for i=1:10:size(allData,2)-1
 
     for j=1:size(objects,1)
         object = objects{j,1}.Measurement;
+
+        laneLimits = [lanes(1,2).LateralOffset lanes(1,1).LateralOffset];
+
+        closeby = 0;
+        if sqrt(object(1)^2+object(2)^2)<5
+            closeby = 1;
+            inLane = object(2) > laneLimits(1) & object(2) < laneLimits(2);
+        end
+
+        if objects{j,1}.SensorIndex==3
+
+            moving = sqrt(object(4)^2+object(5)^2)>29 & sqrt(object(4)^2+object(5)^2)<31;
+        end
         
         object = T*[object(1) object(2) 0 1]';
 
         object = object(1:3)';
 
+        if closeby
+            X3 = [X3; object];
+            Y3 = [Y3; inLane];
+        end
+
         %new_points = [new_points; object];
         %new_points = [new_points; object];
 
+        if objects{j,1}.SensorIndex==3
+            X2 = [X2; object];
+            Y2 = [Y2; moving];
+        end
+
         if objects{j,1}.ObjectClassID == 4 % pedestrians
             X = [X; object];
-            Y = [Y; 4 0];
+            Y = [Y; 4];
         end
 
         if objects{j,1}.ObjectClassID == 3 % bycicles
             X = [X; object];
-            Y = [Y; 3 0];
+            Y = [Y; 3];
         end
 
         if objects{j,1}.ObjectClassID == 1 % cars
             X = [X; object];
-            Y = [Y; 1 0];
+            Y = [Y; 1];
         end
 
         if objects{j,1}.ObjectClassID == 5 % barriers
             X = [X; object];
-            Y = [Y; 5 0];
+            Y = [Y; 5];
         end
     end
 end
@@ -190,22 +220,29 @@ for j=1:uint8(numClusters)
     
     new_points = [new_points; center];
 
-    classification = kNearestNeighbors(X, Y, center);
+    type = kNearestNeighbors(X, Y, center);
+
+    moving = kNearestNeighbors(X2, Y2, center);
+
+    inLane = kNearestNeighbors(X3, Y3, center);
     
-    if classification(1) == 1
-        StopCars = StopCars + 1;
-        MovCars = MovCars + 1;
-    elseif classification(1) == 3
+    if type == 1
+        if moving==0
+            StopCars = StopCars + 1;
+        else
+            MovCars = MovCars + 1;
+        end
+    elseif type == 3
         bikes = bikes + 1;
-    elseif classification(1) == 4
+    elseif type == 4
         peds = peds+1;
-        if classification(2) == 1
+        if inLane == 1
             inPeds = inPeds+1;
         end
     end
 
     % Distância linear (desde o início da simulação) do primeiro peão encontrado na faixa (Lped1)
-    if classification(1) == 4 & classification(2) == 1 & Lped1==-1
+    if type == 4 & inLane == 1 & Lped1==-1
         [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
 
         p1 = PP(index(1), 1:3);
@@ -226,7 +263,7 @@ for j=1:uint8(numClusters)
     end
 
     % Distância linear (desde o início da simulação) do primeiro veículo parado encontrado na estrada (LStopCar1)
-    if classification(1) == 1 & classification(2) == 1 & LStopCar1==-1
+    if type == 1 & inLane == 1 & moving==0 & LStopCar1==-1
         [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
 
         p1 = PP(index(1), 1:3);
@@ -248,7 +285,7 @@ for j=1:uint8(numClusters)
 
     %Distância linear (desde o início da simulação) do início da primeira barreira encontrada junto à estrada (LBarrFirst)
     %Distância linear (desde o início da simulação) do fim da última barreira encontrada junto à estrada (LBarrLast)
-    if classification(1) == 5 & classification(2) == 0 & LStopCar1==-1
+    if type == 5 %& inLane == 0
         [~, index] = sort(sum((PP(:, 1:3) - center).^2,2),1);
 
         p1 = PP(index(1), 1:3);
