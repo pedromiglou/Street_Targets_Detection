@@ -5,21 +5,13 @@ load Street_Targets_Detection/allData_93283.mat
 
 %% Distância linear total percorrida na simulação pelo ego-veículo
 
-%PP = [cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))', cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Orientation', allData, 'UniformOutput', false))'];
-%PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Position', allData, 'UniformOutput', false))';
-%PP = cell2mat(arrayfun(@(S) S.ActorPoses(1).Position', allData, 'UniformOutput', false))';
 PP = cell2mat(arrayfun(@(S) S.INSMeasurements{1,1}.Velocity', allData, 'UniformOutput', false))';
-
-%axis equal
-%subplot(1,2,1)
-%plot(PP(:,1), PP(:,2), '.b');
 
 newPP = [];
 
 cPos = [0 0 0];
 
 for i=1:size(PP,1)
-    %newPP = [newPP; mean(PP(max(1, i-10):min(i+10, size(PP,1)),:),1)];
     cPos = [cPos(1) + PP(i,1)*0.01, cPos(2) + PP(i,2)*0.01, cPos(3) + PP(i,3)*0.01];
     newPP = [newPP; cPos];
 end
@@ -28,14 +20,11 @@ PP = newPP;
 
 newPP = [];
 for i=1:10:size(PP,1)-1
-    newPP = [newPP; PP(i,:) 0 0 atan2(PP(i+1,2)-PP(i,2), PP(i+1,1)-PP(i,1))];
+    newPP = [newPP; PP(i,:) atan2(PP(i+1,2)-PP(i,2), PP(i+1,1)-PP(i,1)) 0 0];
 end
-newPP = [newPP; PP(end,:) 0 0 newPP(end,6)];
+newPP = [newPP; PP(end,:) newPP(end,6) 0 0];
 
 PP = newPP;
-
-%subplot(1,2,2)
-%plot(PP(:,1), PP(:,2), '.b');
 
 %257,... is the right value
 Lcar = sum(sqrt(sum(diff(PP(:,1:3)).^2,2)));
@@ -48,14 +37,10 @@ limits = [-2 vehicleDims.Length;
 -vehicleDims.Width/2-1 vehicleDims.Width/2+1;
 -1 vehicleDims.Height+1];
 
-%xlimits = allData(1).PointClouds{1,1}.XLimits;
-%ylimits = allData(1).PointClouds{1,1}.YLimits;
 xlimits = [-100 100];
 ylimits = [-100 100];
-zlimits = allData(1).PointClouds{1,1}.ZLimits;
-
+zlimits = [0 1];
 lidarViewer = pcplayer(xlimits, ylimits, zlimits);
-%Set axis labels
 xlabel(lidarViewer.Axes, 'X (m)');
 ylabel(lidarViewer.Axes, 'Y (m)');
 zlabel(lidarViewer.Axes, 'Z (m)');
@@ -63,10 +48,8 @@ zlabel(lidarViewer.Axes, 'Z (m)');
 new_points = [];
 for k=1:10:size(allData,2)-1
     pose = PP(uint32((k-1)/10)+1,:);
-    %PP = [cell2mat(arrayfun(@(S) S.ActorPoses.Position, allData, 'UniformOutput', false)), cell2mat(arrayfun(@(S) S.ActorPoses.Orientation, allData, 'UniformOutput', false))];
 
-    %pose = PP(uint32((k-1)/10)+1,:);
-    T = geotransf(pose(1),pose(2),pose(3),pose(4),pose(5),pose(6));
+    T = trvec2tform(pose(1:3)) * eul2tform(pose(4:6));
 
     ptCloud = allData(k).PointClouds{1,1};
 
@@ -115,7 +98,6 @@ for k=1:10:size(allData,2)-1
 
     if size(new_points)>0
         view(lidarViewer, new_points)
-        %pause(0.1)
     end
 end
 
@@ -135,7 +117,7 @@ for i=1:10:size(allData,2)-1
 
     pose = PP(uint32((i-1)/10)+1,:);
 
-    T = geotransf(pose(1),pose(2),pose(3),pose(4),pose(5),pose(6));
+    T = trvec2tform(pose(1:3)) * eul2tform(pose(4:6));
 
     for j=1:size(objects,1)
         object = objects{j,1}.Measurement;
