@@ -1,7 +1,8 @@
 function y = kNearestNeighbors(X,Y,x)
 %MINIMUMDISTANCETO Summary of this function goes here
 %   Detailed explanation goes here
-    k = 3;
+    k = 1;
+
     distances = (X-x).^2;
 
     [distances, order] = sort(sqrt(distances(:,1)+distances(:,2)+distances(:,3)));
